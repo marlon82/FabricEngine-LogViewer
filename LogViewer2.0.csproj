@@ -13,6 +13,7 @@
     <InformationalVersion>2.0.0 Build 10</InformationalVersion>
     <ApplicationIcon>Assets\LogViewer.ico</ApplicationIcon>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\LogViewer.ico" />

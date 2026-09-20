@@ -20,7 +20,9 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          dotnet publish .\LogViewer2.0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=$version -o .\publish\win-x64
+          $numericVersion = ($version -split '[-+]')[0]
+          if (($numericVersion -split '\.').Count -eq 3) { $numericVersion += '.0' }
+          dotnet publish .\LogViewer2.0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=$version -p:AssemblyVersion=$numericVersion -p:FileVersion=$numericVersion -o .\publish\win-x64
           Copy-Item .\publish\win-x64\LogViewer.exe .\LogViewer-2.0.exe
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -30,4 +32,3 @@ jobs:
           files: |
             LogViewer-2.0.exe
             EventCatalogs/*.evdb
-

@@ -1,0 +1,33 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Publish single-file application
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          dotnet publish .\LogViewer2.0.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=$version -o .\publish\win-x64
+          Copy-Item .\publish\win-x64\LogViewer.exe .\LogViewer-2.0.exe
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            LogViewer-2.0.exe
+            EventCatalogs/*.evdb
+

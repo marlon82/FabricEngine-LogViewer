@@ -1,0 +1,36 @@
+name: Publish added event catalogs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "EventCatalogs/**/*.evdb"
+
+permissions:
+  contents: write
+
+jobs:
+  catalogs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Collect changed catalogs
+        id: catalogs
+        shell: bash
+        run: |
+          git diff --diff-filter=AM --name-only HEAD^ HEAD -- 'EventCatalogs/**/*.evdb' > catalog-files.txt
+          if [ ! -s catalog-files.txt ]; then
+            echo "No added or updated event catalogs."
+            exit 1
+          fi
+          cat catalog-files.txt
+      - name: Create incremental catalog release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="catalog-${{ github.run_number }}"
+          mapfile -t files < catalog-files.txt
+          gh release create "$tag" "${files[@]}" --title "Event catalog update ${{ github.run_number }}" --notes "Incremental event-library update. Existing catalog releases remain available."

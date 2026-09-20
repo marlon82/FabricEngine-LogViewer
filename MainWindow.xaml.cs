@@ -367,7 +367,7 @@ public partial class MainWindow : Window
 
             await using var jsonStream = await response.Content.ReadAsStreamAsync();
             using var document = await JsonDocument.ParseAsync(jsonStream);
-            var assets = new Dictionary<string, (string Url, long Size, string Release)>(StringComparer.OrdinalIgnoreCase);
+            var assets = new Dictionary<string, GitHubCatalogAsset>(StringComparer.OrdinalIgnoreCase);
             foreach (var release in document.RootElement.EnumerateArray())
             {
                 if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean()) continue;
@@ -379,8 +379,9 @@ public partial class MainWindow : Window
                     if (!name.EndsWith(".evdb", StringComparison.OrdinalIgnoreCase)) continue;
                     var url = asset.GetProperty("browser_download_url").GetString() ?? "";
                     var size = asset.TryGetProperty("size", out var sizeValue) ? sizeValue.GetInt64() : 0;
+                    var safeName = Path.GetFileName(name);
                     if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
-                        assets.TryAdd(Path.GetFileName(name), (url, size, tag));
+                        assets.TryAdd(safeName, new GitHubCatalogAsset(safeName, url, size, tag, GetCatalogFamily(safeName), File.Exists(Path.Combine(_catalogFolder, safeName))));
                 }
             }
 
@@ -393,25 +394,22 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var totalSize = assets.Values.Sum(x => x.Size);
-            var filePreview = string.Join(Environment.NewLine, assets.Keys.OrderBy(x => x).Take(15));
-            if (assets.Count > 15) filePreview += Environment.NewLine + T($"… und {assets.Count - 15} weitere", $"… and {assets.Count - 15} more");
-            var prompt = T(
-                $"{assets.Count} Eventkatalog(e) ({FormatBytes(totalSize)}) herunterladen bzw. aktualisieren?\n\n{filePreview}\n\nZiel: {_catalogFolder}",
-                $"Download or update {assets.Count} event catalog(s) ({FormatBytes(totalSize)})?\n\n{filePreview}\n\nDestination: {_catalogFolder}");
-            if (MessageBox.Show(this, prompt, T("Eventkataloge von GitHub", "Event catalogs from GitHub"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            var detectedFamily = Regex.Match(_systemType ?? "", @"(?<!\d)\d{4,5}(?!\d)").Value;
+            var selection = new CatalogSelectionWindow(this, assets.Values.OrderBy(x => x.Family).ThenBy(x => x.Name).ToArray(), detectedFamily, _catalogFolder, _german);
+            if (selection.ShowDialog() != true)
             {
                 StatusText.Text = T("Download abgebrochen", "Download cancelled");
                 return;
             }
+            var selectedAssets = selection.SelectedAssets;
 
             Directory.CreateDirectory(_catalogFolder);
             var completed = 0;
-            foreach (var (name, asset) in assets.OrderBy(x => x.Key))
+            foreach (var asset in selectedAssets.OrderBy(x => x.Name))
             {
                 completed++;
-                StatusText.Text = T($"Lade {completed} von {assets.Count}: {name} …", $"Downloading {completed} of {assets.Count}: {name} …");
-                var destination = Path.Combine(_catalogFolder, name);
+                StatusText.Text = T($"Lade {completed} von {selectedAssets.Count}: {asset.Name} …", $"Downloading {completed} of {selectedAssets.Count}: {asset.Name} …");
+                var destination = Path.Combine(_catalogFolder, asset.Name);
                 var temporary = destination + ".download";
                 try
                 {
@@ -429,9 +427,9 @@ public partial class MainWindow : Window
                 }
             }
 
-            StatusText.Text = T($"{assets.Count} Eventkataloge installiert", $"Installed {assets.Count} event catalogs");
+            StatusText.Text = T($"{selectedAssets.Count} Eventkataloge installiert", $"Installed {selectedAssets.Count} event catalogs");
             MessageBox.Show(this,
-                T($"{assets.Count} Eventkatalog(e) wurden installiert bzw. aktualisiert.\n\n{_catalogFolder}", $"{assets.Count} event catalog(s) were installed or updated.\n\n{_catalogFolder}"),
+                T($"{selectedAssets.Count} Eventkatalog(e) wurden installiert bzw. aktualisiert.\n\n{_catalogFolder}", $"{selectedAssets.Count} event catalog(s) were installed or updated.\n\n{_catalogFolder}"),
                 T("Download abgeschlossen", "Download complete"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -449,6 +447,12 @@ public partial class MainWindow : Window
         >= 1024L => $"{bytes / 1024d:0.##} KB",
         _ => $"{bytes} B"
     };
+
+    private static string GetCatalogFamily(string fileName)
+    {
+        var family = Regex.Match(Path.GetFileNameWithoutExtension(fileName), @"(?<!\d)\d{4,5}(?!\d)").Value;
+        return family.Length > 0 ? family : "Other";
+    }
 
     private void SelectCatalogFolder_Click(object sender, RoutedEventArgs e)
     {
@@ -622,7 +626,7 @@ public partial class MainWindow : Window
     private string T(string de, string en) => _german ? de : en;
     private void ApplyLanguage()
     {
-        Title="Extreme Networks FabricEngine (VOSS) Log Viewer"; SubtitleText.Text=T("Netzwerk-Loganalyse · Version 2.0.0 Build 10", "Network log analysis · Version 2.0.0 Build 10"); UpdateLabel.Text="Update"; UpdateButton.ToolTip=T("LogViewer aktualisieren", "Update LogViewer"); CheckUpdatesMenu.Header=T("Jetzt nach Updates suchen …", "Check for updates now …"); IncludePrereleasesMenu.Header=T("Pre-Releases einbeziehen", "Include pre-releases"); LanguageLabel.Text=_german ? "DE" : "EN"; LanguageButton.ToolTip=T("Sprache zu Englisch wechseln", "Switch language to German"); ThemeLabel.Text = _dark ? T("Hell", "Light") : T("Dunkel", "Dark");
+        Title="Extreme Networks FabricEngine (VOSS) Log Viewer"; SubtitleText.Text=T("Netzwerk-Loganalyse · Version 2.0.0 Build 11", "Network log analysis · Version 2.0.0 Build 11"); UpdateLabel.Text="Update"; UpdateButton.ToolTip=T("LogViewer aktualisieren", "Update LogViewer"); CheckUpdatesMenu.Header=T("Jetzt nach Updates suchen …", "Check for updates now …"); IncludePrereleasesMenu.Header=T("Pre-Releases einbeziehen", "Include pre-releases"); LanguageLabel.Text=_german ? "DE" : "EN"; LanguageButton.ToolTip=T("Sprache zu Englisch wechseln", "Switch language to German"); ThemeLabel.Text = _dark ? T("Hell", "Light") : T("Dunkel", "Dark");
         OpenLabel.Text=T("Öffnen", "Open"); AddLabel.Text=T("Weitere Datei", "Add files"); ColumnsLabel.Text=T("Spalten", "Columns"); CatalogLabel.Text=T("Eventkatalog", "Event catalog"); ExportLabel.Text=T("Exportieren", "Export"); ClearLabel.Text=T("Entladen", "Unload"); StatsLabel.Text=T("Statistik", "Statistics");
         UpdateSortButton();
         ResetButton.Content=T("Filter zurücksetzen", "Reset filters"); SearchBox.ToolTip=T("Alle Felder durchsuchen", "Search all fields"); SystemLabel.Text=T("System:", "System:"); SourceLabel.Text=T("Quelle:", "Source:"); DropHint.Text=T("Dateien hier ablegen", "Drop files here"); FilterHint.Text=T("Suche · Modul · Schweregrad · Kategorie", "Search · Module · Severity · Category"); FooterHint.Text=T("Doppelklick öffnet Details · Spaltenköpfe sortieren", "Double-click for details · Click headers to sort");

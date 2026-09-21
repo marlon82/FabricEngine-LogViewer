@@ -90,8 +90,8 @@ public static class EventCatalog
 
     private static (string Product, string Version) ParseCatalogName(string name)
     {
-        name = Regex.Replace(name, "_edoc$", "", RegexOptions.IgnoreCase);
-        var match = Regex.Match(name, @"^(?<product>.+?)\.(?<version>\d+(?:\.\d+)+)$");
+        name = Regex.Replace(name, @"_edoc(?:\s*\(\d+\)|-\d+)?$", "", RegexOptions.IgnoreCase);
+        var match = Regex.Match(name, @"^(?<product>.+?)[.-](?<version>\d+(?:\.\d+)+)$");
         return match.Success ? (match.Groups["product"].Value, match.Groups["version"].Value) : (name, "");
     }
 
